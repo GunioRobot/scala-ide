@@ -12,7 +12,6 @@ import scala.tools.eclipse.util.{ OSGiUtils, EclipseUtils }
 import scala.tools.nsc.util.SourceFile
 import scala.collection.mutable
 import scala.util.matching.Regex
-import org.eclipse.core.runtime.NullProgressMonitor
 import org.eclipse.jdt.core.ICompilationUnit
 import org.eclipse.jdt.core.IJavaModelMarker
 import org.eclipse.core.resources.IResource
@@ -36,12 +35,15 @@ object SDTTestUtils {
     SDTTestUtils.workspace.setDescription(desc)
   }
 
+  enableAutoBuild(false)
+
   /** Return the Java problem markers corresponding to the given compilation unit. */
   def findProblemMarkers(unit: ICompilationUnit) = 
     unit.getUnderlyingResource().findMarkers(IJavaModelMarker.JAVA_MODEL_PROBLEM_MARKER, true, IResource.DEPTH_INFINITE)
   
   lazy val workspace = ResourcesPlugin.getWorkspace
-
+  
+  
   /** Setup the project in the target workspace. The 'name' project should
    *  exist in the source workspace.
    */
@@ -116,10 +118,15 @@ object SDTTestUtils {
       deleteRecursive(rootDir)
   }
 
+  /** Add a new file to the given project. The given path is relative to the 
+   *  project.
+   *  
+   *  The file must not exist.
+   */
   def addFileToProject(project : IProject, path : String, content : String) : IFile = {
     val filePath = new Path(path)
-    val segments = filePath.segments
-    segments.foldLeft(project : IContainer) { (container, segment) =>
+    val dirNames = filePath.segments.init // last segment is the file
+    dirNames.foldLeft(project : IContainer) { (container, segment) =>
       val folder = container.getFolder(new Path(segment))
       if (!folder.exists())
         folder.create(false, true, null)

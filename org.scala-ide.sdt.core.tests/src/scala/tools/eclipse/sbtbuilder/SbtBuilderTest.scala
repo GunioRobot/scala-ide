@@ -17,6 +17,7 @@ import org.mockito.Matchers.any
 import org.eclipse.jdt.core.IProblemRequestor
 import org.eclipse.jdt.core.WorkingCopyOwner
 import scala.tools.eclipse.javaelements.ScalaSourceFile
+import scala.util.matching.Regex
 
 object SbtBuilderTest extends testsetup.TestProjectSetup("builder")
 
@@ -59,6 +60,8 @@ class SbtBuilderTest {
     }
 
     object depProject extends testsetup.TestProjectSetup("builder-sub")
+    depProject.project        // force initialization of this project
+    depProject.project.underlying.build(IncrementalProjectBuilder.INCREMENTAL_BUILD, new NullProgressMonitor)
 
     println("=== Dependency Test === ")
     project.clean(new NullProgressMonitor())
@@ -78,21 +81,26 @@ class SbtBuilderTest {
 
     val problems = getProblemMarkers()
 
-    val messages = for (p <- problems) yield p.getAttribute(IMarker.MESSAGE)
-    println(messages)
+    val errorMessages: List[String] = for (p <- problems) yield p.getAttribute(IMarker.MESSAGE).toString
 
     Assert.assertEquals("Build problems", 2, problems.size)
     Assert.assertEquals("Build Problem should be in FooClient.scala", problems(0).getResource(), fooClientCU.getResource())
-    Assert.assertEquals("Number of error messages differ", expectedMessages.size, messages.size)
-    Assert.assertEquals("Build error messages differ", expectedMessages.toSet, messages.toSet)
+    Assert.assertEquals("Number of error messages differ", expectedMessages.size, errorMessages.size)
+    for (error <- errorMessages) {
+      Assert.assertTrue("Build error messages differ. Expected: %s, Actual: %s".format(expectedMessages, errorMessages), expectedMessages.exists(similarErrorMessage(error)))
+    }
 
     fooClientCU.doWithSourceFile { (sf, comp) =>
       comp.askReload(fooClientCU, fooClientCU.getContents()).get // synchronize with the good compiler
     }
 
     val pcProblems = fooClientCU.asInstanceOf[ScalaSourceFile].getProblems()
-    println(pcProblems)
     Assert.assertEquals("Presentation compiler errors.", 2, pcProblems.size)
+  }
+  
+  /** Returns true if the expected regular expression matches the given error message. */
+  private def similarErrorMessage(msg: String)(expected: String): Boolean = {
+    msg.matches(expected)
   }
 
   lazy val changedFooScala = """
@@ -101,7 +109,8 @@ class SbtBuilderTest {
 class Foo1
 """
 
+  /** Each error message is a regular expression. This allows some variation between compiler versions. */
   lazy val expectedMessages = List(
-    "Foo is not a member of subpack",
+    "(object )?Foo is not a member of (package )?subpack",
     "not found: type Foo")
 }

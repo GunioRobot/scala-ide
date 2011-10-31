@@ -15,7 +15,7 @@ class EclipseUserSimulator {
   var root: IPackageFragmentRoot = null;
   var workspace: IWorkspace = null;
 
-  def createProjectInWorkspace(projectName: String) = {
+  def createProjectInWorkspace(projectName: String, withSourceRoot: Boolean = true) = {
     import org.eclipse.core.resources.ResourcesPlugin;
     import org.eclipse.pde.internal.core.util.CoreUtility;
     import org.eclipse.jdt.internal.core.JavaProject;
@@ -36,17 +36,18 @@ class EclipseUserSimulator {
     val javaProject = JavaCore.create(project);
     javaProject.setOutputLocation(new Path("/" + projectName + "/bin"), null);
 
-    val sourceFolder = project.getFolder("/src");
-    sourceFolder.create(false, true, null);
-
-    root = javaProject.getPackageFragmentRoot(sourceFolder);
-
     var entries = new ArrayBuffer[IClasspathEntry]();
     val vmInstall = JavaRuntime.getDefaultVMInstall();
     val locations = JavaRuntime.getLibraryLocations(vmInstall);
     for (element <- locations)
       entries += JavaCore.newLibraryEntry(element.getSystemLibraryPath(), null, null);
-    entries += JavaCore.newSourceEntry(root.getPath());
+
+    if (withSourceRoot) {
+      val sourceFolder = project.getFolder("/src");
+      sourceFolder.create(false, true, null);
+      root = javaProject.getPackageFragmentRoot(sourceFolder);
+      entries += JavaCore.newSourceEntry(root.getPath());
+    }
     entries += JavaCore.newContainerEntry(Path.fromPortableString(ScalaPlugin.plugin.scalaLibId))
     javaProject.setRawClasspath(entries.toArray[IClasspathEntry], null);
 
@@ -65,8 +66,8 @@ class EclipseUserSimulator {
   def buildWorkspace {
     import org.eclipse.core.internal.resources.Workspace;
     import org.eclipse.core.resources.IncrementalProjectBuilder;
-    val buildManager = workspace.asInstanceOf[Workspace].getBuildManager();
-    buildManager.build(IncrementalProjectBuilder.INCREMENTAL_BUILD, new NullProgressMonitor())
+
+    workspace.build(IncrementalProjectBuilder.INCREMENTAL_BUILD, new NullProgressMonitor())
   }
 
   var fileEditorInput: FileEditorInput = null;
